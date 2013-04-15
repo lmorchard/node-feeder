@@ -181,7 +181,7 @@ suite.addBatch({
                 for (var i=0; i<10; i++) {
                     attrs.push({
                         title: 'Resource ' + i,
-                        resource_url: BASE_URL + '200?id=loadOfResources' + i
+                        resource_url: BASE_URL + '200?id=loadOfResources-' + i
                     });
                 }
 
@@ -189,7 +189,6 @@ suite.addBatch({
                 async.each(attrs, function (item, fe_next) {
                     resources.create(item, {
                         success: function (model, resp, options) {
-                            util.debug('CREATED ' + model.get('id') + ' ' + model.get('resource_url'));
                             created.push(model);
                             fe_next();
                         }
@@ -198,16 +197,13 @@ suite.addBatch({
                     $this.callback(err, resources, created);
                 });
             },
+            /*
             'should have been created': function (err, resources, created) {
                 _.each(resources.models, function (r) {
                     util.debug("RESOURCE " + r.get('resource_url'));
                 });
-                /*
-                _.each(created, function (r) {
-                    util.debug("RESOURCE " + r.get('resource_url'));
-                });
-                */
             },
+            */
             'that all get polled': {
                 topic: function (err, resources, created) {
                     var $this = this;
@@ -217,7 +213,6 @@ suite.addBatch({
                 },
                 'should result in GETs for each': function (err, resources, created) {
                     var $this = this;
-                    util.debug("HTTP STATS " + util.inspect(this.httpd.stats));
                     created.forEach(function (r) {
                         var path = r.get('resource_url').replace(BASE_URL, '/');
                         assert.equal($this.httpd.stats.urls[path], 1);

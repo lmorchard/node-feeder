@@ -2,6 +2,7 @@ var util = require('util'),
     express = require('express'),
     request = require('request'),
     fs = require('fs'),
+    async = require('async'),
     vows = require('vows'),
     assert = require('assert'),
     path = require('path'),
@@ -9,93 +10,28 @@ var util = require('util'),
 
 function r (p) { return require(__dirname + '/../lib/' + p); }
 
-var models = r('models');
-var models_sync = r('models-sync');
+var models = r('models'),
+    models_sync = r('models-sync');
 
 function d (p) { return __dirname + '/' + p; }
 
-var TEST_DB = d('test.db');
 var MOVIES_OPML = d('fixtures/movies.opml');
 var TEST_PORT = '9001';
 var BASE_URL = 'http://localhost:' + TEST_PORT + '/';
 
-process.on('uncaughtException', function (err, data) {
-    util.error("EXCEPTION " + util.inspect(arguments));
-    util.error(err.stack);
-});
+var SHORT_DELAY = 25;
+var MED_DELAY = 100;
+var LONG_DELAY = 5000;
 
-// Creates an HTTP server for fixtures
-function createTestServer (port) {
-    var app = express();
-    var stats = { urls: {}, hits: [] };
-    app.configure(function () {
-        app.use(express.logger({
-            format: ':method :url :status :res[content-length]' +
-                    ' - :response-time ms'
-        }));
-        app.use(function (req, res, mw_next) {
-            var url = req.originalUrl;
-            if (url in stats.urls) {
-                stats.urls[url]++;
-            } else {
-                stats.urls[url] = 1;
-            }
-            stats.hits.push(req.originalUrl);
-            setTimeout(mw_next, 10);
-        });
-        app.use('/200s', function (req, res) {
-            res.send(200, '200 from ' + req.originalUrl);
-        });
-        app.use('/301s', function (req, res) {
-            res.send(301, '301 from ' + req.originalUrl);
-        });
-        app.use('/302s', function (req, res) {
-            res.send(302, '302 from ' + req.originalUrl);
-        });
-        app.use('/404s', function (req, res) {
-            res.send(404, '404 from ' + req.originalUrl);
-        });
-        app.use('/410s', function (req, res) {
-            res.send(410, '410 from ' + req.originalUrl);
-        });
-        app.use('/500s', function (req, res) {
-            res.send(500, '500 from ' + req.originalUrl);
-        });
-        app.use(express['static'](d('fixtures')));
-    });
-    var server = app.listen(port || TEST_PORT);
-    return {
-        app: app,
-        server: server, 
-        stats: stats
-    };
-}
+var TEST_PATH_1 = 'fixtures/movies.opml';
+var TEST_BODY_1 = fs.readFileSync(d(TEST_PATH_1));
+var TEST_BODY_200 = 'THIS IS 200 CONTENT';
+var TEST_BODY_500 = '500 ERROR CONTENT NO ONE SHOULD SEE';
 
-var suite = vows.describe('Basic tests');
-
-var TEST_PATH_1 = 'movies.opml';
-var TEST_BODY_1 = fs.readFileSync(d('fixtures/'+TEST_PATH_1));
-
-function assertResource(expected) {
-    return function (r) {
-        ['status_code', 'body'].forEach(function (name) {
-            if (name in expected) {
-                assert.equal(expected[name], r.get(name));
-            }
-        });
-
-        var path = r.get('resource_url').replace(BASE_URL, '/');
-        var result_hit = path in this.httpd.stats.urls;
-        assert.equal(!!expected.url_hit, result_hit);
-
-        var headers = r.get('headers');
-        var headers_ct = _.keys(headers).length;
-        assert.equal(!!expected.headers_empty, (headers_ct == 0));
-    };
-}
+var suite = vows.describe('Model tests');
 
 suite.addBatch({
-    'a clean DB and an HTTP server': {
+    'a clean DB, an HTTP server, and': {
         topic: function () {
             var $this = this;
             this.httpd = createTestServer();
@@ -110,26 +46,186 @@ suite.addBatch({
             this.msync.close();
             this.httpd.server.close();
         },
-        'and a single resource': {
+        'a resource': {
             topic: function () {
-                return new models.Resource({
-                    resource_url: BASE_URL + TEST_PATH_1
-                });
+                this.callback(null, new models.Resource({
+                    resource_url: BASE_URL + TEST_PATH_1,
+                    max_age: 0
+                }));
             },
             'should start with no data': assertResource({
-                status_code: 0, body: '',
-                headers_empty: true, url_hit: false
+                equals: { status_code: 0, body: '' },
+                truthy: { last_validated: false },
+                headers_empty: true,
+                url_hit: false
             }),
             'that has been polled': {
-                topic: function (r) {
-                    r.poll(this.callback);
+                topic: function (err, r) {
+                    r.poll({}, this.callback);
                 },
                 'should result in a GET to the resource URL': assertResource({
-                    status_code: 200, body: TEST_BODY_1,
-                    headers_empty: false, url_hit: true
+                    equals: { status_code: 200, body: TEST_BODY_1 },
+                    truthy: { last_validated: true },
+                    headers_empty: false,
+                    url_hit: true
                 })
+            },
+            'that has been polled': {
+                topic: function (err, r) {
+                    r.poll({}, this.callback);
+                },
+                'and then polled again after a delay': {
+                    topic: function (err, r, last_validated_1) {
+                        var $this = this;
+                        var last_validated = r.get('last_validated');
+                        setTimeout(function () {
+                            r.poll({}, function () {
+                                $this.callback(null, r, last_validated);
+                            });
+                        }, 100);
+                    },
+                    'should result in a newer last_validated':
+                        function (err, r, prev_lv) {
+                            assert.ok(r.get('last_validated') > prev_lv);
+                        }
+                }
             }
         },
+        'a disabled resource that has been polled': {
+            topic: function () {
+                var r = new models.Resource({
+                    resource_url: BASE_URL + TEST_PATH_1,
+                    disabled: true,
+                    max_age: 0
+                });
+                r.poll({}, this.callback);
+            },
+            'should not result in a GET': assertResource({
+                equals: { status_code: 0, body: '' },
+                headers_empty: true,
+                url_hit: false
+            })
+        },
+        'a long-delayed resource with a timeout that has been polled': {
+            topic: function () {
+                var r = new models.Resource({
+                    resource_url: BASE_URL + 'delayed',
+                    max_age: 0,
+                    timeout: SHORT_DELAY * 2
+                });
+                r.poll({}, this.callback);
+            },
+            'should result in an aborted GET and an error': assertResource({
+                equals: { status_code: 408, body: '' },
+                error: true,
+                headers_empty: true,
+                url_hit: null
+            })
+        },
+        'a 200-then-500 resource that has been polled twice': {
+            topic: function () {
+                var $this = this;
+                var r = new models.Resource({
+                    resource_url: BASE_URL + '200then500',
+                    max_age: 0
+                });
+                r.poll({}, function (err, r) {
+                    assert.equal(r.get('status_code'), 200);
+                    assert.equal(r.get('body'), TEST_BODY_200);
+                    r.poll({}, $this.callback);
+                });
+            },
+            'should result in 500 status but body content from previous 200 OK': assertResource({
+                equals: { status_code: 500, body: TEST_BODY_200 },
+                error: false,
+                headers_empty: null,
+                url_hit: null
+            })
+        },
+        'a resource with a long max_age polled 3 times': {
+            topic: function () {
+                var $this = this;
+                var r = new models.Resource({
+                    resource_url: BASE_URL + '200?id=pollMeThrice',
+                    max_age: MED_DELAY
+                });
+                r.poll({}, function (err, r) {
+                    r.poll({}, function (err, r) {
+                        r.poll({}, $this.callback);
+                    });
+                });
+            },
+            'should result in only 1 GET': function (err, r) {
+                assert.equal(this.httpd.stats.urls['/200?id=pollMeThrice'], 1);
+            },
+            'and then polled twice after max_age': {
+                topic: function (err, r) {
+                    var $this = this;
+                    setTimeout(function () {
+                        r.poll({}, function (err, r) {
+                            r.poll({}, $this.callback);
+                        });
+                    }, MED_DELAY * 1.1);
+                },
+                'should result in only 2 GETs': function (err, r) {
+                    assert.equal(this.httpd.stats.urls['/200?id=pollMeThrice'], 2);
+                }
+            }
+        },
+        'a load of resources': {
+            topic: function () {
+                var $this = this;
+                var resources = new models.ResourceCollection();
+
+                var attrs = [];
+                for (var i=0; i<10; i++) {
+                    attrs.push({
+                        title: 'Resource ' + i,
+                        resource_url: BASE_URL + '200?id=loadOfResources' + i
+                    });
+                }
+
+                var created = [];
+                async.each(attrs, function (item, fe_next) {
+                    resources.create(item, {
+                        success: function (model, resp, options) {
+                            util.debug('CREATED ' + model.get('id') + ' ' + model.get('resource_url'));
+                            created.push(model);
+                            fe_next();
+                        }
+                    });
+                }, function (err) {
+                    $this.callback(err, resources, created);
+                });
+            },
+            'should have been created': function (err, resources, created) {
+                _.each(resources.models, function (r) {
+                    util.debug("RESOURCE " + r.get('resource_url'));
+                });
+                /*
+                _.each(created, function (r) {
+                    util.debug("RESOURCE " + r.get('resource_url'));
+                });
+                */
+            },
+            'that all get polled': {
+                topic: function (err, resources, created) {
+                    var $this = this;
+                    resources.pollAll({}, function () {
+                        $this.callback(err, resources, created);
+                    });
+                },
+                'should result in GETs for each': function (err, resources, created) {
+                    var $this = this;
+                    util.debug("HTTP STATS " + util.inspect(this.httpd.stats));
+                    created.forEach(function (r) {
+                        var path = r.get('resource_url').replace(BASE_URL, '/');
+                        assert.equal($this.httpd.stats.urls[path], 1);
+                    });
+                }
+            }
+        }
+        /*
         'and a load of resources': {
             topic: function () {
                 var $this = this;
@@ -151,15 +247,122 @@ suite.addBatch({
                         $this.callback(null, resources, feeds);
                     });
             },
-            /*
             "PPLAYU": function (resources, feeds) {
                 assert.ok(true);
             }
-            */
         },
+        */
     }
 });
 
-// run or export the suite.
-if (process.argv[1] === __filename) suite.run();
-else suite.export(module);
+// Creates an HTTP server for fixtures and contrived responses
+function createTestServer (port) {
+    var app = express();
+    var stats = { urls: {}, hits: [] };
+    app.configure(function () {
+        
+        app.use(express.logger({
+            format: ':method :url :status :res[content-length]' +
+                    ' - :response-time ms'
+        }));
+
+        app.use(function (req, res, mw_next) {
+            // Record some stats about this request.
+            var url = req.originalUrl;
+            if (url in stats.urls) {
+                stats.urls[url]++;
+            } else {
+                stats.urls[url] = 1;
+            }
+            stats.hits.push(req.originalUrl);
+            // Requests get an artificial delay, to shake out async problems.
+            setTimeout(mw_next, SHORT_DELAY);
+        });
+
+        // fixtures - serve up model fixtures
+        app.use('/fixtures', express['static'](d('fixtures')));
+        
+        // delayed - intentionally delayed response
+        app.use('/delayed', function (req, res) {
+            setTimeout(function () {
+                res.send(200, 'Delayed response');
+            }, LONG_DELAY);
+        });
+
+        // 200 - always responds with 200 OK
+        app.use('/200', function (req, res) {
+            res.send(200, '200 from ' + req.originalUrl);
+        });
+
+        // 200then500 - alternate between 200 OK and 500 Server Error
+        var ct_200then500 = 0;
+        app.use('/200then500', function (req, res) {
+            if (ct_200then500++ % 2) {
+                res.send(500, TEST_BODY_500);
+            } else {
+                res.send(200, TEST_BODY_200);
+            }
+        });
+
+        app.use('/301s', function (req, res) {
+            res.send(301, '301 from ' + req.originalUrl);
+        });
+        app.use('/302s', function (req, res) {
+            res.send(302, '302 from ' + req.originalUrl);
+        });
+        app.use('/404s', function (req, res) {
+            res.send(404, '404 from ' + req.originalUrl);
+        });
+        app.use('/410s', function (req, res) {
+            res.send(410, '410 from ' + req.originalUrl);
+        });
+        app.use('/500s', function (req, res) {
+            res.send(500, '500 from ' + req.originalUrl);
+        });
+
+    });
+
+    var server = app.listen(port || TEST_PORT);
+
+    return {
+        app: app,
+        server: server, 
+        stats: stats
+    };
+}
+
+function assertResource(expected) {
+    return function (err, r) {
+        ['status_code', 'body'].forEach(function (name) {
+            if (expected.equals && name in expected.equals) {
+                assert.equal(r.get(name), expected.equals[name]);
+            }
+            if (expected.not_equals && name in expected.not_equals) {
+                assert.notEqual(r.get(name), expected.not_equals[name]);
+            }
+            if (expected.truthy && name in expected.truthy) {
+                var val = !!expected.truthy[name];
+                assert.ok(!!r.get(name), val);
+            }
+        });
+        if (null !== expected.error) {
+            assert.equal(!!err, !!expected.error);
+        }
+        if (null !== expected.url_hit) {
+            var path = r.get('resource_url').replace(BASE_URL, '/');
+            var result_hit = path in this.httpd.stats.urls;
+            assert.equal(result_hit, !!expected.url_hit);
+        }
+        if (null !== expected.headers_empty) {
+            var headers = r.get('headers');
+            var headers_ct = _.keys(headers).length;
+            assert.equal((headers_ct == 0), !!expected.headers_empty);
+        }
+    };
+}
+
+if (process.argv[1] === __filename) {
+    suite.run({error: false});
+} else {
+    suite.export(module, {error: false});
+}

@@ -1,0 +1,36 @@
+{
+    "author": "Les Orchard <me@lmorchard.com>",
+    "name": "feeder",
+    "description": "feed poller",
+    "version": "0.0.1",
+    "main": "lib/index",
+    "repository": {
+        "url": ""
+    },
+    "scripts": {
+        "test": "vows --spec"
+    },
+    "dependencies": {
+        "optimist": "*",
+        "underscore": "*",
+        "async": "*",
+        "express": "*",
+        "backbone": "*",
+        "backbone-callbacks": "*",
+        "request": "*",
+        "couch": "*",
+        "backbone-couch": "*",
+        "dirty": "*",
+        "backbone-dirty": "*",
+        "node-uuid": "*",
+        "node-feedparser": "git://github.com/danmactough/node-feedparser.git",
+        "node-opmlparser": "git://github.com/danmactough/node-opmlparser.git"
+    },
+    "devDependencies": {
+        "vows": "*"
+    },
+    "optionalDependencies": {},
+    "engines": {
+        "node": "*"
+    }
+}

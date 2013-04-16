@@ -33,7 +33,7 @@ var TEST_BODY_500 = '500 ERROR CONTENT NO ONE SHOULD SEE';
 var suite = vows.describe('Model tests');
 
 suite.addBatch({
-    'a clean DB, an HTTP server, and': {
+    '...': {
         topic: function () {
             var $this = this;
             this.httpd = createTestServer();
@@ -94,32 +94,19 @@ suite.addBatch({
             }
         },
         'a disabled resource that has been polled': {
-            topic: function () {
-                var $this = this;
-                var r = new models.Resource({
-                    resource_url: BASE_URL + TEST_PATH_1,
-                    disabled: true,
-                    max_age: 0
-                });
-                var evs = [];
-                r.on('all', function (ev, model) {
-                    if (model == r) { evs.push(ev); }
-                });
-                r.poll({}, function (err, r) {
-                    $this.callback(err, r, evs);
-                });
-            },
+            topic: trackedResourcePoll({
+                resource_url: BASE_URL + TEST_PATH_1,
+                disabled: true,
+                max_age: 0
+            }),
             'should not result in a GET': assertResource({
                 equals: { status_code: 0, body: '' },
                 headers_empty: true,
                 url_hit: false
             }),
             'should result in a poll:disabled event': function (err, r, evs) {
-                assert.ok(evs, [
-                    'poll:start',
-                    'poll:disabled',
-                    'poll:end'
-                ]);
+                assert.deepEqual(evs,
+                    ['poll:start', 'poll:disabled', 'poll:end']);
             }
         },
         'a long-delayed resource with a timeout that has been polled': {
@@ -151,13 +138,17 @@ suite.addBatch({
                     r.poll({}, $this.callback);
                 });
             },
-            'should result in 500 status but body content from previous 200 OK': assertResource({
+            'should result in 500 status, yet body content from previous 200 OK': assertResource({
                 equals: { status_code: 500, body: TEST_BODY_200 },
                 error: false,
                 headers_empty: null,
                 url_hit: null
             })
         },
+        'a resource that supports If-None-Match and yields ETag when polled':
+            testConditionalGET('supports-if-none-match'),
+        'a resource that supports If-Modified-Since and yields Last-Modified when polled':
+            testConditionalGET('supports-if-modified-since'),
         'a resource with a long max_age polled 3 times': {
             topic: function () {
                 var $this = this;
@@ -188,7 +179,7 @@ suite.addBatch({
                 }
             }
         },
-        'a bunch of resources': {
+        'a bunch of 200 OK resources': {
             topic: function () {
                 var $this = this;
 
@@ -287,7 +278,7 @@ function createTestServer (port) {
     var stats = { urls: {}, hits: [] };
     app.configure(function () {
         
-        app.use(express.logger({
+        if (false) app.use(express.logger({
             format: ':method :url :status :res[content-length]' +
                     ' - :response-time ms'
         }));
@@ -325,6 +316,30 @@ function createTestServer (port) {
         app.use('/200then500', function (req, res) {
             if (ct_200then500++ % 2) {
                 res.send(500, TEST_BODY_500);
+            } else {
+                res.send(200, TEST_BODY_200);
+            }
+        });
+
+        // supports-if-none-match
+        var ETAG = '"I LIKE PIE"';
+        app.use('/supports-if-none-match', function (req, res) {
+            res.set('ETag', ETAG);
+            if (req.get('If-None-Match') == ETAG) {
+                res.send(304, '');
+            } else {
+                res.send(200, TEST_BODY_200);
+            }
+        });
+
+        // supports-if-modified-since
+        var LAST_MODIFIED = 'Tue, 16 Apr 2013 12:45:26 GMT';
+        app.use('/supports-if-modified-since', function (req, res) {
+            res.set('Last-Modified', LAST_MODIFIED);
+            // HACK: This should really parse the date and actually check
+            // modified since.
+            if (req.get('If-Modified-Since') == LAST_MODIFIED) {
+                res.send(304, '');
             } else {
                 res.send(200, TEST_BODY_200);
             }
@@ -386,6 +401,59 @@ function assertResource(expected) {
             assert.equal((headers_ct == 0), !!expected.headers_empty);
         }
     };
+}
+
+// Create and track events for a single resource poll
+function trackedResourcePoll (attrs) {
+    return function () {
+        var $this = this;
+        var args = Array.prototype.splice.call(arguments,0);
+        
+        var r = new models.Resource(attrs);
+        var evs = [];
+        r.on('all', function (ev, model) {
+            if (model == r && /^poll:/.test(ev)) { evs.push(ev); }
+        });
+
+        // Cumbersome, but ensure (err, r, evs) are the first three callback
+        // parameters, yet include the rest that may have come in.
+        var err = args.shift();
+        args.unshift(evs);
+        args.unshift(r);
+        args.unshift(err);
+
+        r.poll({}, function (err, r) {
+            $this.callback.apply($this, args);
+        });
+    };
+}
+
+// Build a test for conditional get
+function testConditionalGET (path) {
+    return {
+        topic: trackedResourcePoll({
+            resource_url: BASE_URL + path,
+            max_age: 0
+        }),
+        'and then polled again': {
+            topic: function (err, r, evs) {
+                var $this = this;
+                r.poll({}, function (err, r) {
+                    $this.callback(err, r, evs);
+                });
+            },
+            'should result in expected content': function (err, r, evs) {
+                assert.equal(r.get('body'), TEST_BODY_200);
+            },
+            'should result in 200, then 304 status': function (err, r, evs) {
+                assert.equal(r.get('status_code'), 304);
+                assert.deepEqual(evs, [
+                    'poll:start', 'poll:status_200', 'poll:end',
+                    'poll:start', 'poll:status_304', 'poll:end'
+                ]);
+            }
+        }
+    }
 }
 
 // Track events produced by a collection of resources.

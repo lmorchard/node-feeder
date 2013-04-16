@@ -95,18 +95,32 @@ suite.addBatch({
         },
         'a disabled resource that has been polled': {
             topic: function () {
+                var $this = this;
                 var r = new models.Resource({
                     resource_url: BASE_URL + TEST_PATH_1,
                     disabled: true,
                     max_age: 0
                 });
-                r.poll({}, this.callback);
+                var evs = [];
+                r.on('all', function (ev, model) {
+                    if (model == r) { evs.push(ev); }
+                });
+                r.poll({}, function (err, r) {
+                    $this.callback(err, r, evs);
+                });
             },
             'should not result in a GET': assertResource({
                 equals: { status_code: 0, body: '' },
                 headers_empty: true,
                 url_hit: false
-            })
+            }),
+            'should result in a poll:disabled event': function (err, r, evs) {
+                assert.ok(evs, [
+                    'poll:start',
+                    'poll:disabled',
+                    'poll:end'
+                ]);
+            }
         },
         'a long-delayed resource with a timeout that has been polled': {
             topic: function () {
@@ -177,7 +191,9 @@ suite.addBatch({
         'a bunch of resources': {
             topic: function () {
                 var $this = this;
+
                 var resources = new models.ResourceCollection();
+                var stats = trackResources(resources);
 
                 var expected_urls = [];
                 var attrs = [];
@@ -199,64 +215,39 @@ suite.addBatch({
                         }
                     });
                 }, function (err) {
-                    $this.callback(err, expected_urls, resources, created);
+                    $this.callback(err, resources, stats, expected_urls);
                 });
             },
             'that all get polled': {
-                topic: function (err, expected_urls, resources, created) {
+                topic: function (err, resources, stats, expected_urls) {
                     var $this = this;
-
-                    var events = {};
-                    for (var i = 0, url; url = expected_urls[i]; i++) {
-                        events[url] = [];
-                    }
-
-                    var result_max_concurrency = 0;
-                    var curr_concurrency = 0;
-                    
-                    resources.on('all', function (ev) {
-                        // Only capture poll:* events
-                        if (!/^poll:/.test(ev)) { return; }
-
-                        // Log event history by resource URL.
-                        var url = arguments[1].get('resource_url');
-                        events[url].push(ev);
-
-                        // Track actual max concurrency
-                        if ('poll:start' == ev) { curr_concurrency++; }
-                        if ('poll:end' == ev)   { curr_concurrency--; }
-                        if (curr_concurrency > result_max_concurrency) {
-                            result_max_concurrency = curr_concurrency;
-                        }
-                    });
-
                     resources.pollAll({
                         concurrency: MAX_CONCURRENCY
                     }, function () {
-                        $this.callback(err, result_max_concurrency, expected_urls, events);
+                        $this.callback(err, resources, stats, expected_urls);
                     });
                 },
                 'should result in GETs for all of them': 
-                        function (err, result_max_concurrency, expected_urls, events) {
+                        function (err, resources, stats, expected_urls) {
                     for (var i = 0, url; url = expected_urls[i]; i++) {
                         var path = url.replace(BASE_URL, '/');
                         assert.equal(this.httpd.stats.urls[path], 1);
                     };
                 },
                 '"poll:*" events should narrate the process': 
-                        function (err, result_max_concurrency, expected_urls, events) {
+                        function (err, resources, stats, expected_urls) {
                     var expected_events = [
                         'poll:start',
                         'poll:status_200',
                         'poll:end'
                     ];
                     for (var i = 0, url; url = expected_urls[i]; i++) {
-                        assert.deepEqual(events[url], expected_events);
+                        assert.deepEqual(stats.events[url], expected_events);
                     };
                 },
                 'in-progress poll count should never exceed specified concurrency maximum':
-                        function (err, result_max_concurrency, expected_urls, events) {
-                    assert.ok(result_max_concurrency <= MAX_CONCURRENCY);
+                        function (err, resources, stats, expected_urls) {
+                    assert.ok(stats.max_concurrency <= MAX_CONCURRENCY);
                 }
             }
         }
@@ -366,6 +357,7 @@ function createTestServer (port) {
     };
 }
 
+// Produce a callback that asserts expected facts against a resource topic.
 function assertResource(expected) {
     return function (err, r) {
         ['status_code', 'body'].forEach(function (name) {
@@ -394,6 +386,35 @@ function assertResource(expected) {
             assert.equal((headers_ct == 0), !!expected.headers_empty);
         }
     };
+}
+
+// Track events produced by a collection of resources.
+function trackResources (resources) {
+    var stats = {
+        events: {},
+        urls: [],
+        max_concurrency: 0
+    };
+
+    var curr_concurrency = 0;
+    
+    resources.on('all', function (ev, model) {
+        var url = model.get('resource_url');
+        if ('add' == ev) {
+            stats.urls.push(url);
+            stats.events[url] = [];
+        }
+        if (/^poll:/.test(ev)) {
+            stats.events[url].push(ev);
+            if ('poll:start' == ev) { curr_concurrency++; }
+            if ('poll:end' == ev)   { curr_concurrency--; }
+            if (curr_concurrency > stats.max_concurrency) {
+                stats.max_concurrency = curr_concurrency;
+            }
+        }
+    });
+
+    return stats;
 }
 
 if (process.argv[1] === __filename) {

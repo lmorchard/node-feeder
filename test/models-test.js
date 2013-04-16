@@ -149,37 +149,59 @@ suite.addBatch({
             testConditionalGET('supports-if-none-match'),
         'a resource that supports If-Modified-Since and yields Last-Modified when polled':
             testConditionalGET('supports-if-modified-since'),
-        'a resource with a long max_age polled 3 times': {
-            topic: function () {
-                var $this = this;
-                var r = new models.Resource({
-                    resource_url: BASE_URL + '200?id=pollMeThrice',
-                    max_age: SHORT_DELAY * 5
-                });
-                r.poll({}, function (err, r) {
-                    r.poll({}, function (err, r) {
-                        r.poll({}, $this.callback);
-                    });
-                });
-            },
-            'should result in only 1 GET': function (err, r) {
-                assert.equal(this.httpd.stats.urls['/200?id=pollMeThrice'], 1);
-            },
-            'and then polled twice after max_age': {
-                topic: function (err, r) {
+        'a resource with a long max_age': {
+            topic: trackedResourcePoll({
+                resource_url: BASE_URL + '200?id=pollMeThrice',
+                max_age: SHORT_DELAY * 5
+            }),
+            'polled multiple times': {
+                topic: function (err, r, evs) {
                     var $this = this;
-                    setTimeout(function () {
+                    r.poll({}, function (err, r) {
                         r.poll({}, function (err, r) {
-                            r.poll({}, $this.callback);
+                            $this.callback(err, r, evs);
                         });
-                    }, SHORT_DELAY * 10);
+                    });
                 },
-                'should result in only 2 GETs': function (err, r) {
-                    assert.equal(this.httpd.stats.urls['/200?id=pollMeThrice'], 2);
+                'should result in only 1 GET': function (err, r, evs) {
+                    assert.equal(this.httpd.stats.urls['/200?id=pollMeThrice'], 1);
+                },
+                'should result in poll:fresh events for polls after the first poll:status_200':
+                        function (err, r, evs) {
+                    assert.deepEqual(evs, [
+                        'poll:start', 'poll:status_200', 'poll:end',
+                        'poll:start', 'poll:fresh', 'poll:end',
+                        'poll:start', 'poll:fresh', 'poll:end' 
+                    ]);
+                },
+                'and then polled twice after max_age': {
+                    topic: function (err, r, evs) {
+                        var $this = this;
+                        setTimeout(function () {
+                            r.poll({}, function (err, r) {
+                                r.poll({}, function (err, r) {
+                                    $this.callback(err, r, evs);
+                                });
+                            });
+                        }, SHORT_DELAY * 10);
+                    },
+                    'should result in only 2 GETs': function (err, r, evs) {
+                        assert.equal(this.httpd.stats.urls['/200?id=pollMeThrice'], 2);
+                    },
+                    'should result in a poll:status_200, then a poll:fresh':
+                            function (err, r, evs) {
+                        assert.deepEqual(evs, [
+                            'poll:start', 'poll:status_200', 'poll:end',
+                            'poll:start', 'poll:fresh', 'poll:end',
+                            'poll:start', 'poll:fresh', 'poll:end',
+                            'poll:start', 'poll:status_200', 'poll:end',
+                            'poll:start', 'poll:fresh', 'poll:end'
+                        ]);
+                    }
                 }
             }
         },
-        'a bunch of 200 OK resources': {
+        'a collection of 200 OK resources': {
             topic: function () {
                 var $this = this;
 
@@ -196,6 +218,12 @@ suite.addBatch({
                         resource_url: url
                     });
                 }
+
+                attrs.push({
+                    title: 'Resource disabled',
+                    resource_url: BASE_URL + '200?id=loadOfResources-disabled',
+                    disabled: true
+                });
 
                 var created = [];
                 async.each(attrs, function (item, fe_next) {
@@ -214,21 +242,39 @@ suite.addBatch({
                     var $this = this;
                     resources.pollAll({
                         concurrency: MAX_CONCURRENCY
-                    }, function () {
+                    }, function (err) {
                         $this.callback(err, resources, stats, expected_urls);
                     });
                 },
-                'should result in GETs for all of them': 
+                'should result in poll:allStart and poll:allEnd events from the collection':
+                        function (err, resources, stats, expected_urls) {
+                    assert.deepEqual(stats.events._collection,
+                        ['poll:allStart', 'poll:allEnd']);
+                },
+                'should not result in a GET for the disabled resource':
+                        function (err, resources, stats, expected_urls) {
+                    var path = '/200?id=loadOfResources-disabled';
+                    assert.notEqual(this.httpd.stats.urls[path], 1);
+                },
+                'should result in GETs for expected URLs': 
                         function (err, resources, stats, expected_urls) {
                     for (var i = 0, url; url = expected_urls[i]; i++) {
                         var path = url.replace(BASE_URL, '/');
                         assert.equal(this.httpd.stats.urls[path], 1);
                     };
                 },
-                '"poll:*" events should narrate the process': 
+                'should result in a poll:disabled event for the disabled resource':
+                        function (err, resources, stats, expected_urls) {
+                    var url = BASE_URL + '200?id=loadOfResources-disabled';
+                    var expected_events = [
+                        'poll:enqueue', 'poll:start', 'poll:disabled', 'poll:end'
+                    ];
+                    assert.deepEqual(stats.events[url], expected_events);
+                },
+                '"poll:*" events should narrate the poll for enabled resources': 
                         function (err, resources, stats, expected_urls) {
                     var expected_events = [
-                        'poll:start', 'poll:status_200', 'poll:end'
+                        'poll:enqueue', 'poll:start', 'poll:status_200', 'poll:end'
                     ];
                     for (var i = 0, url; url = expected_urls[i]; i++) {
                         assert.deepEqual(stats.events[url], expected_events);
@@ -411,7 +457,9 @@ function trackedResourcePoll (attrs) {
         var r = new models.Resource(attrs);
         var evs = [];
         r.on('all', function (ev, model) {
-            if (model == r && /^poll:/.test(ev)) { evs.push(ev); }
+            if (model == r && /^poll:/.test(ev)) {
+                evs.push(ev);
+            }
         });
 
         // Cumbersome, but ensure (err, r, evs) are the first three callback
@@ -458,7 +506,9 @@ function testConditionalGET (path) {
 // Track events produced by a collection of resources.
 function trackResources (resources) {
     var stats = {
-        events: {},
+        events: {
+            '_collection': []
+        },
         urls: [],
         max_concurrency: 0
     };
@@ -472,7 +522,11 @@ function trackResources (resources) {
             stats.events[url] = [];
         }
         if (/^poll:/.test(ev)) {
+            // HACK: No URL is a special case - events from the collection itself.
+            if (!url) { url = '_collection'; }
+
             stats.events[url].push(ev);
+            
             if ('poll:start' == ev) { curr_concurrency++; }
             if ('poll:end' == ev)   { curr_concurrency--; }
             if (curr_concurrency > stats.max_concurrency) {

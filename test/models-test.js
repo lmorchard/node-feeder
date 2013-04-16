@@ -154,7 +154,7 @@ suite.addBatch({
                 var $this = this;
                 var r = new models.Resource({
                     resource_url: BASE_URL + '200?id=pollMeThrice',
-                    max_age: MED_DELAY
+                    max_age: SHORT_DELAY * 5
                 });
                 r.poll({}, function (err, r) {
                     r.poll({}, function (err, r) {
@@ -172,7 +172,7 @@ suite.addBatch({
                         r.poll({}, function (err, r) {
                             r.poll({}, $this.callback);
                         });
-                    }, MED_DELAY * 1.1);
+                    }, SHORT_DELAY * 10);
                 },
                 'should result in only 2 GETs': function (err, r) {
                     assert.equal(this.httpd.stats.urls['/200?id=pollMeThrice'], 2);
@@ -228,9 +228,7 @@ suite.addBatch({
                 '"poll:*" events should narrate the process': 
                         function (err, resources, stats, expected_urls) {
                     var expected_events = [
-                        'poll:start',
-                        'poll:status_200',
-                        'poll:end'
+                        'poll:start', 'poll:status_200', 'poll:end'
                     ];
                     for (var i = 0, url; url = expected_urls[i]; i++) {
                         assert.deepEqual(stats.events[url], expected_events);
@@ -293,7 +291,7 @@ function createTestServer (port) {
             }
             stats.hits.push(req.originalUrl);
             // Requests get an artificial delay, to shake out async problems.
-            setTimeout(mw_next, SHORT_DELAY);
+            setTimeout(mw_next, SHORT_DELAY / 2);
         });
 
         // fixtures - serve up model fixtures
@@ -368,7 +366,8 @@ function createTestServer (port) {
     return {
         app: app,
         server: server, 
-        stats: stats
+        stats: stats,
+        BASE_URL: 'http://localhost:' + port + '/'
     };
 }
 

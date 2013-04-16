@@ -23,6 +23,8 @@ var SHORT_DELAY = 25;
 var MED_DELAY = 100;
 var LONG_DELAY = 5000;
 
+var MAX_CONCURRENCY = 3;
+
 var TEST_PATH_1 = 'fixtures/movies.opml';
 var TEST_BODY_1 = fs.readFileSync(d(TEST_PATH_1));
 var TEST_BODY_200 = 'THIS IS 200 CONTENT';
@@ -172,16 +174,19 @@ suite.addBatch({
                 }
             }
         },
-        'a load of resources': {
+        'a bunch of resources': {
             topic: function () {
                 var $this = this;
                 var resources = new models.ResourceCollection();
 
+                var expected_urls = [];
                 var attrs = [];
-                for (var i=0; i<10; i++) {
+                for (var i = 0; i < MAX_CONCURRENCY * 3; i++) {
+                    var url = BASE_URL + '200?id=loadOfResources-' + i;
+                    expected_urls.push(url);
                     attrs.push({
                         title: 'Resource ' + i,
-                        resource_url: BASE_URL + '200?id=loadOfResources-' + i
+                        resource_url: url
                     });
                 }
 
@@ -194,29 +199,64 @@ suite.addBatch({
                         }
                     });
                 }, function (err) {
-                    $this.callback(err, resources, created);
+                    $this.callback(err, expected_urls, resources, created);
                 });
             },
-            /*
-            'should have been created': function (err, resources, created) {
-                _.each(resources.models, function (r) {
-                    util.debug("RESOURCE " + r.get('resource_url'));
-                });
-            },
-            */
             'that all get polled': {
-                topic: function (err, resources, created) {
+                topic: function (err, expected_urls, resources, created) {
                     var $this = this;
-                    resources.pollAll({}, function () {
-                        $this.callback(err, resources, created);
+
+                    var events = {};
+                    for (var i = 0, url; url = expected_urls[i]; i++) {
+                        events[url] = [];
+                    }
+
+                    var result_max_concurrency = 0;
+                    var curr_concurrency = 0;
+                    
+                    resources.on('all', function (ev) {
+                        // Only capture poll:* events
+                        if (!/^poll:/.test(ev)) { return; }
+
+                        // Log event history by resource URL.
+                        var url = arguments[1].get('resource_url');
+                        events[url].push(ev);
+
+                        // Track actual max concurrency
+                        if ('poll:start' == ev) { curr_concurrency++; }
+                        if ('poll:end' == ev)   { curr_concurrency--; }
+                        if (curr_concurrency > result_max_concurrency) {
+                            result_max_concurrency = curr_concurrency;
+                        }
+                    });
+
+                    resources.pollAll({
+                        concurrency: MAX_CONCURRENCY
+                    }, function () {
+                        $this.callback(err, result_max_concurrency, expected_urls, events);
                     });
                 },
-                'should result in GETs for each': function (err, resources, created) {
-                    var $this = this;
-                    created.forEach(function (r) {
-                        var path = r.get('resource_url').replace(BASE_URL, '/');
-                        assert.equal($this.httpd.stats.urls[path], 1);
-                    });
+                'should result in GETs for all of them': 
+                        function (err, result_max_concurrency, expected_urls, events) {
+                    for (var i = 0, url; url = expected_urls[i]; i++) {
+                        var path = url.replace(BASE_URL, '/');
+                        assert.equal(this.httpd.stats.urls[path], 1);
+                    };
+                },
+                '"poll:*" events should narrate the process': 
+                        function (err, result_max_concurrency, expected_urls, events) {
+                    var expected_events = [
+                        'poll:start',
+                        'poll:status_200',
+                        'poll:end'
+                    ];
+                    for (var i = 0, url; url = expected_urls[i]; i++) {
+                        assert.deepEqual(events[url], expected_events);
+                    };
+                },
+                'in-progress poll count should never exceed specified concurrency maximum':
+                        function (err, result_max_concurrency, expected_urls, events) {
+                    assert.ok(result_max_concurrency <= MAX_CONCURRENCY);
                 }
             }
         }

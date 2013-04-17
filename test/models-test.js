@@ -199,6 +199,24 @@ suite.addBatch({
                             'poll:start', 'poll:status_200', 'poll:end',
                             'poll:start', 'poll:fresh', 'poll:end'
                         ]);
+                    },
+                    'and polled one more time with a short max_age option': {
+                        topic: function (err, r, evs) {
+                            var $this = this;
+                            r.poll({max_age: 0}, function (err, r) {
+                                $this.callback(err, r, evs);
+                            });
+                        },
+                        'should result in a poll:status_200': function (err, r, evs) {
+                            assert.deepEqual(evs, [
+                                'poll:start', 'poll:status_200', 'poll:end',
+                                'poll:start', 'poll:fresh', 'poll:end',
+                                'poll:start', 'poll:fresh', 'poll:end',
+                                'poll:start', 'poll:status_200', 'poll:end',
+                                'poll:start', 'poll:fresh', 'poll:end',
+                                'poll:start', 'poll:status_200', 'poll:end',
+                            ]);
+                        }
                     }
                 }
             }

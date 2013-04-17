@@ -14,7 +14,7 @@
         "test": "vows --spec"
     },
     "dependencies": {
-        "optimist": "*",
+        "commander": "*",
         "nconf": "*",
         "winston": "*",
         "underscore": "*",

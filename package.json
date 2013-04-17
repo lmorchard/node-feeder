@@ -7,11 +7,16 @@
     "repository": {
         "url": ""
     },
+    "bin": {
+        "feeder": "./bin/feeder"
+    },
     "scripts": {
         "test": "vows --spec"
     },
     "dependencies": {
         "optimist": "*",
+        "nconf": "*",
+        "winston": "*",
         "underscore": "*",
         "async": "*",
         "express": "*",
@@ -27,7 +32,8 @@
         "node-opmlparser": "git://github.com/danmactough/node-opmlparser.git"
     },
     "devDependencies": {
-        "vows": "*"
+        "vows": "*",
+        "jshint": "*"
     },
     "optionalDependencies": {},
     "engines": {

@@ -1,3 +1,5 @@
+/*jshint node: true, expr: false, boss: true */
+
 var util = require('util'),
     express = require('express'),
     request = require('request'),

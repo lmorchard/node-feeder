@@ -1,0 +1,20 @@
+{>"layouts/main"/}
+
+{<title}Feeds!{/title}
+
+{<content}
+    <ul>
+        {#feeds}
+            <li>
+                <p><a href="{resource.resource_url}">{meta.title}</a></p>
+                <pre>{@contextDump key="meta"/}</pre>
+                <ul>
+                    {#items}
+                        <li><a href="{link}">{title}</a></li>
+                    {/items}
+                </ul>
+            </li>
+        {/feeds}
+    </ul>
+</div>
+{/content}

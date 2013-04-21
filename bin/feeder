@@ -1,0 +1,3 @@
+#!/usr/bin/env node
+/*jshint node: true, expr: false, boss: true */
+require('../lib/cli').main(process.argv);

@@ -20,6 +20,11 @@
         "underscore": "*",
         "async": "*",
         "express": "*",
+        "dust-linkedin": "git://github.com/linkedin/dustjs.git",
+        "consolidate": "git://github.com/visionmedia/consolidate.js.git",
+        "express-persona": "*",
+        "socket.io": "*",
+        "socket.io-client": "*",
         "backbone": "*",
         "backbone-callbacks": "*",
         "request": "*",
@@ -33,7 +38,8 @@
     },
     "devDependencies": {
         "vows": "*",
-        "jshint": "*"
+        "jshint": "*",
+        "supervisor": "*"
     },
     "optionalDependencies": {},
     "engines": {

@@ -13,50 +13,43 @@ var util = require('util'),
 function r (p) { return require(__dirname + '/../lib/' + p); }
 
 var models = r('models'),
-    models_sync = r('models-sync');
+    models_sync = r('models-sync'),
+    test_utils = r('test-utils');
 
 function d (p) { return __dirname + '/' + p; }
 
 var MOVIES_OPML = d('fixtures/movies.opml');
-var TEST_PORT = '9001';
-var BASE_URL = 'http://localhost:' + TEST_PORT + '/';
+var BASE_PORT = 11000;
 
-var SHORT_DELAY = 25;
-var MED_DELAY = 100;
-var LONG_DELAY = 5000;
-
-var MAX_CONCURRENCY = 3;
-
-var TEST_PATH_1 = 'fixtures/movies.opml';
-var TEST_BODY_1 = fs.readFileSync(d(TEST_PATH_1));
-var TEST_BODY_200 = 'THIS IS 200 CONTENT';
-var TEST_BODY_500 = '500 ERROR CONTENT NO ONE SHOULD SEE';
 
 var suite = vows.describe('Model tests');
 
 suite.addBatch({
-    '...': {
-        topic: function () {
-            var $this = this;
-            this.httpd = createTestServer();
-            this.msync = new models_sync.LocmemSync()
-                .open(function (err, sync_handler) {
-                    var Backbone = require('backbone');
-                    Backbone.sync = sync_handler;
-                    $this.callback();
-                });
-        },
-        teardown: function () {
-            this.msync.close();
-            this.httpd.server.close();
-        },
-        'a resource': {
+    '(FeedItem models)': {
+        topic: initTopic,
+        teardown: initTeardown,
+        'play': {
             topic: function () {
-                this.callback(null, new models.Resource({
-                    resource_url: BASE_URL + TEST_PATH_1,
-                    max_age: 0
-                }));
+                var $this = this;
+                request(this.base_url + '200?id=wang', function (err, resp, body) {
+                    $this.callback(null, body);
+                });
             },
+            'should work': function (err, foo) {
+            }
+        }
+    }
+});
+
+suite.addBatch({
+    '(Resource models)': {
+        topic: initTopic,
+        teardown: initTeardown,
+
+        'a resource': {
+            topic: resourceTopic({
+                resource_url: test_utils.TEST_PATH_1
+            }),
             'should start with no data': assertResource({
                 equals: { status_code: 0, body: '' },
                 truthy: { last_validated: false },
@@ -68,16 +61,11 @@ suite.addBatch({
                     r.poll({}, this.callback);
                 },
                 'should result in a GET to the resource URL': assertResource({
-                    equals: { status_code: 200, body: TEST_BODY_1 },
+                    equals: { status_code: 200, body: test_utils.TEST_BODY_1 },
                     truthy: { last_validated: true },
                     headers_empty: false,
                     url_hit: true
-                })
-            },
-            'that has been polled (again)': {
-                topic: function (err, r) {
-                    r.poll({}, this.callback);
-                },
+                }),
                 'and then polled again after a delay': {
                     topic: function (err, r, last_validated_1) {
                         var $this = this;
@@ -96,10 +84,9 @@ suite.addBatch({
             }
         },
         'a disabled resource that has been polled': {
-            topic: trackedResourcePoll({
-                resource_url: BASE_URL + TEST_PATH_1,
-                disabled: true,
-                max_age: 0
+            topic: polledResourceTopic({
+                resource_url: test_utils.TEST_PATH_1,
+                disabled: true
             }),
             'should not result in a GET': assertResource({
                 equals: { status_code: 0, body: '' },
@@ -112,14 +99,10 @@ suite.addBatch({
             }
         },
         'a long-delayed resource with a timeout that has been polled': {
-            topic: function () {
-                var r = new models.Resource({
-                    resource_url: BASE_URL + 'delayed',
-                    max_age: 0,
-                    timeout: SHORT_DELAY * 2
-                });
-                r.poll({}, this.callback);
-            },
+            topic: polledResourceTopic({
+                resource_url: 'delayed',
+                timeout: test_utils.SHORT_DELAY * 2
+            }),
             'should result in an aborted GET and an error': assertResource({
                 equals: { status_code: 408, body: '' },
                 error: true,
@@ -127,25 +110,24 @@ suite.addBatch({
                 url_hit: null
             })
         },
-        'a 200-then-500 resource that has been polled twice': {
-            topic: function () {
-                var $this = this;
-                var r = new models.Resource({
-                    resource_url: BASE_URL + '200then500',
-                    max_age: 0
-                });
-                r.poll({}, function (err, r) {
-                    assert.equal(r.get('status_code'), 200);
-                    assert.equal(r.get('body'), TEST_BODY_200);
-                    r.poll({}, $this.callback);
-                });
-            },
-            'should result in 500 status, yet body content from previous 200 OK': assertResource({
-                equals: { status_code: 500, body: TEST_BODY_200 },
-                error: false,
-                headers_empty: null,
-                url_hit: null
-            })
+        'a 200-then-500 resource': {
+            topic: resourceTopic({ resource_url: '200then500' }),
+            'that has been polled twice': {
+                topic: function (err, r) {
+                    var $this = this;
+                    r.poll({}, function (err, r) {
+                        assert.equal(r.get('status_code'), 200);
+                        assert.equal(r.get('body'), test_utils.TEST_BODY_200);
+                        r.poll({}, $this.callback);
+                    });
+                },
+                'should result in 500 status, yet body content from previous 200 OK': assertResource({
+                    equals: { status_code: 500, body: test_utils.TEST_BODY_200 },
+                    error: false,
+                    headers_empty: null,
+                    url_hit: null
+                })
+            }
         },
         
         'a resource that supports If-None-Match and yields ETag when polled':
@@ -155,9 +137,9 @@ suite.addBatch({
             testConditionalGET('supports-if-modified-since'),
 
         'a resource with a long max_age': {
-            topic: trackedResourcePoll({
-                resource_url: BASE_URL + '200?id=pollMeThrice',
-                max_age: SHORT_DELAY * 5
+            topic: polledResourceTopic({
+                resource_url: '200?id=pollMeThrice',
+                max_age: test_utils.SHORT_DELAY * 5
             }),
             'polled multiple times': {
                 topic: function (err, r, evs) {
@@ -188,7 +170,7 @@ suite.addBatch({
                                     $this.callback(err, r, evs);
                                 });
                             });
-                        }, SHORT_DELAY * 10);
+                        }, test_utils.SHORT_DELAY * 10);
                     },
                     'should result in only 2 GETs': function (err, r, evs) {
                         assert.equal(this.httpd.stats.urls['/200?id=pollMeThrice'], 2);
@@ -217,46 +199,12 @@ suite.addBatch({
             }
         },
         'a collection of 200 OK resources': {
-            topic: function () {
-                var $this = this;
-
-                var resources = new models.ResourceCollection();
-                var stats = trackResources(resources);
-
-                var expected_urls = [];
-                var attrs = [];
-                for (var i = 0; i < MAX_CONCURRENCY * 3; i++) {
-                    var url = BASE_URL + '200?id=loadOfResources-' + i;
-                    expected_urls.push(url);
-                    attrs.push({
-                        title: 'Resource ' + i,
-                        resource_url: url
-                    });
-                }
-
-                attrs.push({
-                    title: 'Resource disabled',
-                    resource_url: BASE_URL + '200?id=loadOfResources-disabled',
-                    disabled: true
-                });
-
-                var created = [];
-                async.each(attrs, function (item, fe_next) {
-                    resources.create(item, {
-                        success: function (model, resp, options) {
-                            created.push(model);
-                            fe_next();
-                        }
-                    });
-                }, function (err) {
-                    $this.callback(err, resources, stats, expected_urls);
-                });
-            },
+            topic: test_utils.trackedResourcesTopic('200?id=loadOfResources', true),
             'that all get polled': {
                 topic: function (err, resources, stats, expected_urls) {
                     var $this = this;
                     resources.pollAll({
-                        concurrency: MAX_CONCURRENCY
+                        concurrency: test_utils.MAX_CONCURRENCY
                     }, function (err) {
                         $this.callback(err, resources, stats, expected_urls);
                     });
@@ -274,13 +222,13 @@ suite.addBatch({
                 'should result in GETs for expected URLs': 
                         function (err, resources, stats, expected_urls) {
                     for (var i = 0, url; url = expected_urls[i]; i++) {
-                        var path = url.replace(BASE_URL, '/');
+                        var path = url.replace(this.base_url, '/');
                         assert.equal(this.httpd.stats.urls[path], 1);
                     }
                 },
                 'should result in a poll:disabled event for the disabled resource':
                         function (err, resources, stats, expected_urls) {
-                    var url = BASE_URL + '200?id=loadOfResources-disabled';
+                    var url = this.base_url + '200?id=loadOfResources-disabled';
                     var expected_events = [
                         'poll:enqueue', 'poll:start', 'poll:disabled', 'poll:end'
                     ];
@@ -297,96 +245,87 @@ suite.addBatch({
                 },
                 'in-progress poll count should never exceed specified concurrency maximum':
                         function (err, resources, stats, expected_urls) {
-                    assert.ok(stats.max_concurrency <= MAX_CONCURRENCY);
+                    assert.ok(stats.max_concurrency <= test_utils.MAX_CONCURRENCY);
+                }
+            }
+        },
+        'a collection of 200 OK resources (again)': {
+            topic: test_utils.trackedResourcesTopic('200?id=aborter'),
+            'that all get polled, but the process is aborted': {
+                topic: function (err, resources, stats, expected_urls) {
+                    var $this = this;
+
+                    var left_to_start = 4;
+                    var ended_ct = 0;
+                    var poll_handle = null;
+
+                    // Allow some polls to start, then attempt an abort
+                    resources.on('poll:start', function (r) {
+                        if (--left_to_start <= 0) {
+                            process.nextTick(function () {
+                                poll_handle.abort();
+                            });
+                        }
+                    });
+                    
+                    // Count how many actually ended
+                    resources.on('poll:end', function (r) { ended_ct++; });
+
+                    // Finally start up the polling, with a concurrency that
+                    // gives us a chance to abort.
+                    poll_handle = resources.pollAll({
+                        concurrency: left_to_start
+                    }, function (err) {
+                        $this.callback(err, ended_ct, resources, stats, expected_urls);
+                    });
+                    
+                },
+                'should result in not all of the resources having been polled':
+                        function (err, ended_ct, resources, stats, expected_urls) {
+                    
+                    assert.equal(ended_ct, 4);
+
+                    assert.deepEqual(stats.events._collection,
+                        ['poll:allStart', 'poll:abort', 'poll:allEnd']);
+
+                    var url_prefix = this.base_url + '200?id=aborter';
+                    
+                    for (var i=0; i<4; i++) {
+                        assert.deepEqual(stats.events[url_prefix + i],
+                                         ['poll:enqueue', 'poll:start',
+                                          'poll:status_200', 'poll:end']);
+                    }
+                    
+                    for (var j=4; j<9; j++) {
+                        assert.deepEqual(stats.events[url_prefix + i],
+                                         ['poll:enqueue']); 
+                    }
+
                 }
             }
         }
     }
 });
 
-// Creates an HTTP server for fixtures and contrived responses
-function createTestServer (port) {
-    var app = express();
-    var stats = { urls: {}, hits: [] };
-    app.configure(function () {
-        
-        if (false) app.use(express.logger({
-            format: ':method :url :status :res[content-length]' +
-                    ' - :response-time ms'
-        }));
+// Topic that initializes common stuff
+// (there's probably a better way to do this)
+function initTopic () {
+    var $this = this;
+    
+    this.httpd = test_utils.createTestServer(++BASE_PORT);
+    this.base_url = 'http://localhost:' + BASE_PORT + '/';
 
-        app.use(function (req, res, mw_next) {
-            // Record some stats about this request.
-            var url = req.originalUrl;
-            if (url in stats.urls) {
-                stats.urls[url]++;
-            } else {
-                stats.urls[url] = 1;
-            }
-            stats.hits.push(req.originalUrl);
-            // Requests get an artificial delay, to shake out async problems.
-            setTimeout(mw_next, SHORT_DELAY / 2);
-        });
-
-        // fixtures - serve up model fixtures
-        app.use('/fixtures', express.static(d('fixtures')));
-        
-        // delayed - intentionally delayed response
-        app.use('/delayed', function (req, res) {
-            setTimeout(function () {
-                res.send(200, 'Delayed response');
-            }, LONG_DELAY);
-        });
-
-        // 200 - always responds with 200 OK
-        app.use('/200', function (req, res) {
-            res.send(200, '200 from ' + req.originalUrl);
-        });
-
-        // 200then500 - alternate between 200 OK and 500 Server Error
-        var ct_200then500 = 0;
-        app.use('/200then500', function (req, res) {
-            if (ct_200then500++ % 2) {
-                res.send(500, TEST_BODY_500);
-            } else {
-                res.send(200, TEST_BODY_200);
-            }
-        });
-
-        // supports-if-none-match
-        var ETAG = '"I LIKE PIE"';
-        app.use('/supports-if-none-match', function (req, res) {
-            res.set('ETag', ETAG);
-            if (req.get('If-None-Match') == ETAG) {
-                res.send(304, '');
-            } else {
-                res.send(200, TEST_BODY_200);
-            }
-        });
-
-        // supports-if-modified-since
-        var LAST_MODIFIED = 'Tue, 16 Apr 2013 12:45:26 GMT';
-        app.use('/supports-if-modified-since', function (req, res) {
-            res.set('Last-Modified', LAST_MODIFIED);
-            // HACK: This should really parse the date and actually check
-            // modified since.
-            if (req.get('If-Modified-Since') == LAST_MODIFIED) {
-                res.send(304, '');
-            } else {
-                res.send(200, TEST_BODY_200);
-            }
-        });
-
+    var msync = this.msync = new models_sync.LocmemSync();
+    msync.open(function (err, sync_proxy) {
+        $this.sync_proxy = sync_proxy;
+        $this.callback();
     });
+}
 
-    var server = app.listen(port || TEST_PORT);
-
-    return {
-        app: app,
-        server: server, 
-        stats: stats,
-        BASE_URL: 'http://localhost:' + port + '/'
-    };
+// Teardown for the initializer topic
+function initTeardown () {
+    this.msync.close();
+    this.httpd.server.close();
 }
 
 // Produce a callback that asserts expected facts against a resource topic.
@@ -408,7 +347,7 @@ function assertResource(expected) {
             assert.equal(!!err, !!expected.error);
         }
         if (null !== expected.url_hit) {
-            var path = r.get('resource_url').replace(BASE_URL, '/');
+            var path = r.get('resource_url').replace(this.base_url, '/');
             var result_hit = path in this.httpd.stats.urls;
             assert.equal(result_hit, !!expected.url_hit);
         }
@@ -420,29 +359,37 @@ function assertResource(expected) {
     };
 }
 
-// Create and track events for a single resource poll
-function trackedResourcePoll (attrs) {
+// Create a Resource with convenient testing defaults
+function resource ($this, attrs) {
+    attrs = _.defaults(attrs, {
+        max_age: 0
+    });
+    attrs.resource_url = $this.base_url + attrs.resource_url;
+    var r = new models.Resource(attrs);
+    r.sync = $this.sync_proxy;
+    return r;
+}
+
+// Create a topic that produces a Resource
+function resourceTopic (attrs) {
+    return function () {
+        this.callback(null, resource(this, attrs));
+    };
+}
+
+// Create a topic that tracks events for a single resource poll
+function polledResourceTopic (attrs, poll_options) {
     return function () {
         var $this = this;
-        var args = Array.prototype.splice.call(arguments,0);
-        
-        var r = new models.Resource(attrs);
+        var r = resource(this, attrs);
         var evs = [];
         r.on('all', function (ev, model) {
             if (model == r && /^poll:/.test(ev)) {
                 evs.push(ev);
             }
         });
-
-        // Cumbersome, but ensure (err, r, evs) are the first three callback
-        // parameters, yet include the rest that may have come in.
-        var err = args.shift();
-        args.unshift(evs);
-        args.unshift(r);
-        args.unshift(err);
-
-        r.poll({}, function (err, r) {
-            $this.callback.apply($this, args);
+        r.poll(poll_options, function (err, r) {
+            $this.callback(err, r, evs);
         });
     };
 }
@@ -450,8 +397,8 @@ function trackedResourcePoll (attrs) {
 // Build a test for conditional get
 function testConditionalGET (path) {
     return {
-        topic: trackedResourcePoll({
-            resource_url: BASE_URL + path,
+        topic: polledResourceTopic({
+            resource_url: path,
             max_age: 0
         }),
         'and then polled again': {
@@ -462,7 +409,7 @@ function testConditionalGET (path) {
                 });
             },
             'should result in expected content': function (err, r, evs) {
-                assert.equal(r.get('body'), TEST_BODY_200);
+                assert.equal(r.get('body'), test_utils.TEST_BODY_200);
             },
             'should result in 200, then 304 status': function (err, r, evs) {
                 assert.equal(r.get('status_code'), 304);
@@ -473,41 +420,6 @@ function testConditionalGET (path) {
             }
         }
     };
-}
-
-// Track events produced by a collection of resources.
-function trackResources (resources) {
-    var stats = {
-        events: {
-            '_collection': []
-        },
-        urls: [],
-        max_concurrency: 0
-    };
-
-    var curr_concurrency = 0;
-    
-    resources.on('all', function (ev, model) {
-        var url = model.get('resource_url');
-        if ('add' == ev) {
-            stats.urls.push(url);
-            stats.events[url] = [];
-        }
-        if (/^poll:/.test(ev)) {
-            // HACK: No URL is a special case - events from the collection itself.
-            if (!url) { url = '_collection'; }
-
-            stats.events[url].push(ev);
-            
-            if ('poll:start' == ev) { curr_concurrency++; }
-            if ('poll:end' == ev)   { curr_concurrency--; }
-            if (curr_concurrency > stats.max_concurrency) {
-                stats.max_concurrency = curr_concurrency;
-            }
-        }
-    });
-
-    return stats;
 }
 
 if (process.argv[1] === __filename) {

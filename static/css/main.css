@@ -5,3 +5,23 @@
 .polls li .time { min-width: 6em; text-align: center; }
 .polls li .time:after { content: " ms";}
 .polls li .parsed { min-width: 3em; text-align: center; }
+
+ul.feeds { margin: 0; padding: 0; list-style-type: none; width: 100%; }
+ul.feeds .feed { clear: both; width: 100%; }
+ul.feeds .feed h2 { float: left; display: block; width: 128px; height: 128px; position: relative; background: rgba(0,0,0,0.6); margin: 4px; padding: 0; color: #fff; font-size: 1em; line-height: 1.25em; }
+ul.feeds .feed h2 a { font-size: 1.25em; display: block;
+    position: absolute; bottom: 0; left: 0; color: #fff;
+    padding: 6px; text-decoration: none;
+}
+ul.feeds .feed h2 .favicon { width: 16px; height: 16px; margin: 4px; }
+ul.feeds .feed .items { margin: 0; padding: 0; list-style-type: none; overflow: auto; margin-right: -1000px; }
+ul.feeds .feed .items .item { float: left;  position: relative; margin: 4px; width: 128px; height: 128px; overflow: hidden; background: #ddd; }
+ul.feeds .feed .items .item a { display: block; width: 128px; height: 128px; text-decoration: none; overflow: hidden; }
+ul.feeds .feed .items .item a img { width: 128px; height: 128px; position: absolute; top: 0; left: 0 }
+ul.feeds .feed .items .item a span { 
+    font-size: 0.75em; line-height: 1.125em;
+    display: block; min-width: calc(100% - 12px);
+    position: absolute; bottom: 0; left: 0; 
+    background: rgba(0,0,0,0.6); color: #fff;
+    padding: 6px;
+}

@@ -34,7 +34,8 @@
         "backbone-dirty": "*",
         "node-uuid": "*",
         "node-feedparser": "git://github.com/danmactough/node-feedparser.git",
-        "node-opmlparser": "git://github.com/danmactough/node-opmlparser.git"
+        "node-opmlparser": "git://github.com/danmactough/node-opmlparser.git",
+        "thumb-extractor": "git://github.com/lmorchard/thumb-extractor.git"
     },
     "devDependencies": {
         "vows": "*",

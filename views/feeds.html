@@ -4,17 +4,13 @@
 
 {<content}
     <ul>
-        {#feeds}
+        {#items}
             <li>
-                <p><a href="{resource.resource_url}">{meta.title}</a></p>
-                <pre>{@contextDump key="meta"/}</pre>
-                <ul>
-                    {#items}
-                        <li><a href="{link}">{title}</a></li>
-                    {/items}
-                </ul>
+            <!-- {published}: -->
+            <!-- http://www.google.com/s2/favicons?domain={resource_host} -->
+            <a href="{resource.meta.link}"><img width="16" height="16" src="http://g.etfv.co/{resource_url|u}"></a> <a href="{link}">{title}</a>
             </li>
-        {/feeds}
+        {/items}
     </ul>
 </div>
 {/content}

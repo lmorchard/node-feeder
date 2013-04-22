@@ -1,6 +1,7 @@
-.polls li { }
 .hidden { display: none; }
-/*
-.polls .inprogress { color: #333; }
-.polls .finished { color: #6f6; }
-*/
+
+.polls li { }
+.polls li .status { min-width: 3em; text-align: center; }
+.polls li .time { min-width: 6em; text-align: center; }
+.polls li .time:after { content: " ms";}
+.polls li .parsed { min-width: 3em; text-align: center; }

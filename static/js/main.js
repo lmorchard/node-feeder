@@ -52,6 +52,8 @@ $('section#poll').each(function () {
                 '&nbsp;',
                 '<span class="time badge badge-inverse">---</span>',
                 '&nbsp;',
+                '<span class="parsed badge">---</span>',
+                '&nbsp;',
                 '<span class="url"></span>',
                 '</li>'
             ].join(''));
@@ -60,6 +62,11 @@ $('section#poll').each(function () {
                 .data('start', t_now())
                 .find('.url').text(msg.url).end()
                 .prependTo('.inprogress');
+        })
+        .on('poll:parsed', function (msg) {
+            var id = 'poll-' + md5(msg.url);
+            var item = $('#' + id);
+            item.find('.parsed').text(msg.parsed_ct);
         })
         .on('poll:end', function (msg) {
             var id = 'poll-' + md5(msg.url);
@@ -93,8 +100,8 @@ $('section#poll').each(function () {
 
     $('#startPoll').click(function (ev) {
         sock.emit('startPoll', {
-            concurrency: 8,
-            max_age: 0
+            // max_age: 0,
+            concurrency: 8
         });
     });
 

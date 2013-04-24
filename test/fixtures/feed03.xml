@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<rdf:RDF 
+ xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+ xmlns="http://purl.org/rss/1.0/"
+ xmlns:dc="http://purl.org/dc/elements/1.1/"
+>
+  <channel rdf:about="http://example.com/feed3.xml">
+    <title>Feed 03</title>
+    <link>http://example.com/feed03</link>
+    <description>Feed 03 description</description>
+    <items>
+      <rdf:Seq>
+        <rdf:li resource="http://example.com/feed03/item01"/>
+        <rdf:li resource="http://example.com/feed03/item02"/>
+        <rdf:li resource="http://example.com/feed03/item03"/>
+      </rdf:Seq>
+    </items>
+  </channel>
+  <item rdf:about="http://example.com/feed03/item01">
+     <title>Item #1</title>
+     <link>http://example.com/feed03/item01</link>
+     <description>Item #1 content</description>
+     <dc:date>2012-06-15T21:00:36+00:00</dc:date>
+  </item>
+  <item rdf:about="http://example.com/feed03/item02">
+     <title>Item #2</title>
+     <link>http://example.com/feed03/item02</link>
+     <description>Item #2 content</description>
+     <dc:date>2012-06-13T20:00:36+00:00</dc:date>
+  </item>
+  <item rdf:about="http://example.com/feed03/item03">
+     <title>Item #3</title>
+     <link>http://example.com/feed03/item03</link>
+     <description>Item #3 content</description>
+     <dc:date>2012-06-11T20:00:36+00:00</dc:date>
+  </item>
+</rdf:RDF>

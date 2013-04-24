@@ -66,7 +66,7 @@ $('section#poll').each(function () {
         .on('poll:parsed', function (msg) {
             var id = 'poll-' + md5(msg.url);
             var item = $('#' + id);
-            item.find('.parsed').text(msg.parsed_ct);
+            item.find('.parsed').text(msg.new_items_ct + ' / ' + msg.parsed_ct);
         })
         .on('poll:end', function (msg) {
             var id = 'poll-' + md5(msg.url);

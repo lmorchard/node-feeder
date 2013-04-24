@@ -4,7 +4,7 @@
 .polls li .status { min-width: 3em; text-align: center; }
 .polls li .time { min-width: 6em; text-align: center; }
 .polls li .time:after { content: " ms";}
-.polls li .parsed { min-width: 3em; text-align: center; }
+.polls li .parsed { min-width: 6em; text-align: center; }
 
 ul.feeds { margin: 0; padding: 0; list-style-type: none; width: 100%; }
 ul.feeds .feed { clear: both; width: 100%; }

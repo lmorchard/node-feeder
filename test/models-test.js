@@ -37,11 +37,174 @@ suite.addBatch({
             },
             'should work': function (err, foo) {
             }
+        },
+        'a changing feed resource': {
+            topic: function () {
+                var $this = this;
+
+                var r = test_utils.trackedResources(this);
+                var resources = r[0];
+                var stats = r[1];
+
+                var feed_items = new models.FeedItemCollection();
+                feed_items.sync = $this.sync_proxy;
+
+                var results = [];
+                var doPoll = function (resource, wf_next) {
+                    resource.poll({
+                        max_age: 0
+                    }, function (err, resource) {
+                        util.debug("ITEMS CT " + feed_items.models.length);
+                        feed_items.each(function (item) {
+                            util.debug("ID " + item.get('id'));
+                        });
+                        feed_items.parseResource(resource, function (err, result) {
+                            results.push(result);
+                            wf_next(null, resource);
+                        });
+                    });
+                };
+
+                async.waterfall([
+                    function (wf_next) {
+                        resources.create({
+                            resource_url: $this.base_url + '200seq/feed-seq-$$.xml'
+                        }, {
+                            success: function (resource, resp, options) {
+                                util.debug("URL " + resource.get('resource_url'));
+                                wf_next(null, resource);
+                            }
+                        });
+                    },
+                    doPoll, doPoll, doPoll, doPoll
+                ], function (err, result) {
+                    $this.callback(err, results);
+                });
+            },
+            'should work okay':
+                    function (err, results) {
+
+                /*
+                var items = feed_items.map(function (item) {
+                    var data = item.pick('resource_url', 'link', 'published');
+                    data.published = ''+data.published;
+                    return data;
+                });
+                */
+
+                util.debug('RESULTS ' + util.inspect(results));
+
+            }
+        },
+        /*
+        'a set of fixture feed resources, all polled and parsed': {
+            topic: function () {
+                var $this = this;
+
+                var r = test_utils.trackedResources(this);
+                var resources = r[0];
+                var stats = r[1];
+
+                var feed_items = new models.FeedItemCollection();
+                feed_items.sync = $this.sync_proxy;
+
+                var attrs = [];
+                for (var i=1; i<4; i++) {
+                    attrs.push({
+                        resource_url: this.base_url + 'fixtures/feed0' + i + '.xml'
+                    });
+                }
+                
+                var feed_stats = {};
+                var created = [];
+                async.each(attrs, function (item, fe_next) {
+                    resources.create(item, {
+                        success: function (model, resp, options) {
+                            created.push(model);
+                            fe_next();
+                        }
+                    });
+                }, function (err) {
+                    resources.pollAll({
+                        concurrency: test_utils.MAX_CONCURRENCY
+                    }, function (err) {
+                        async.each(resources.models, function (resource, fe_next) {
+                            var url = resource.get('resource_url');
+                            feed_items.parseResource(resource, function (err, result) {
+                                feed_stats[url] = result;
+                                fe_next();
+                            });
+                        }, function (err) {
+                            $this.callback(err, resources, feed_items, stats, feed_stats);
+                        });
+                    });
+                });
+            },
+
+            'should result in the expected set of feed items':
+                    function (err, resources, feed_items, stats, feed_stats) {
+                var expected = [ 
+                    { 
+                        resource_url: 'http://localhost:11001/fixtures/feed01.xml', 
+                            link: 'http://example.com/feed01/item01', 
+                            published: 'Fri Jun 15 2012 17:12:36 GMT-0400 (EDT)' 
+                    }, 
+                    { 
+                        resource_url: 'http://localhost:11001/fixtures/feed03.xml', 
+                            link: 'http://example.com/feed03/item01', 
+                            published: 'Fri Jun 15 2012 17:00:36 GMT-0400 (EDT)' 
+                    }, 
+                    { 
+                        resource_url: 'http://localhost:11001/fixtures/feed02.xml', 
+                            link: 'http://example.com/feed02/item01', 
+                            published: 'Fri Jun 15 2012 16:12:36 GMT-0400 (EDT)' 
+                    }, 
+                    { 
+                        resource_url: 'http://localhost:11001/fixtures/feed01.xml', 
+                            link: 'http://example.com/feed01/item02', 
+                            published: 'Thu Jun 14 2012 17:12:36 GMT-0400 (EDT)' 
+                    }, 
+                    { 
+                        resource_url: 'http://localhost:11001/fixtures/feed01.xml', 
+                            link: 'http://example.com/feed01/item03', 
+                            published: 'Wed Jun 13 2012 17:12:36 GMT-0400 (EDT)' 
+                    }, 
+                    { 
+                        resource_url: 'http://localhost:11001/fixtures/feed03.xml', 
+                            link: 'http://example.com/feed03/item02', 
+                            published: 'Wed Jun 13 2012 16:00:36 GMT-0400 (EDT)' 
+                    }, 
+                    { 
+                        resource_url: 'http://localhost:11001/fixtures/feed02.xml', 
+                            link: 'http://example.com/feed02/item02', 
+                            published: 'Tue Jun 12 2012 16:12:36 GMT-0400 (EDT)' 
+                    }, 
+                    { 
+                        resource_url: 'http://localhost:11001/fixtures/feed03.xml', 
+                            link: 'http://example.com/feed03/item03', 
+                            published: 'Mon Jun 11 2012 16:00:36 GMT-0400 (EDT)' 
+                    }, 
+                    { 
+                        resource_url: 'http://localhost:11001/fixtures/feed02.xml', 
+                            link: 'http://example.com/feed02/item03', 
+                            published: 'Sun Jun 10 2012 16:12:36 GMT-0400 (EDT)' 
+                    } 
+                ];
+                    
+                var items = feed_items.map(function (item) {
+                    var data = item.pick('resource_url', 'link', 'published');
+                    data.published = ''+data.published;
+                    return data;
+                });
+
+                assert.deepEqual(items, expected);
+            }
         }
+        */
     }
 });
 
-suite.addBatch({
+if (false) suite.addBatch({
     '(Resource models)': {
         topic: initTopic,
         teardown: initTeardown,

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+    <channel>
+        <title>Feed 02</title>
+        <link>http://example.com/feed02</link>
+        <description>Feed 02</description>
+        <managingEditor>Les Orchard (me@lmorchard.com)</managingEditor>
+        <lastBuildDate>Sat, 16 Jun 2012 01:33:19 +0000</lastBuildDate>
+        <language>en</language>
+
+        <item>
+            <title>Item #1</title>
+            <pubDate>Fri, 15 Jun 2012 20:12:36 +0000</pubDate>
+            <description>Item #1 content</description>
+            <link>http://example.com/feed02/item01</link>
+            <guid>http://example.com/feed02/item01</guid>
+        </item>
+
+        <item>
+            <title>Item #2</title>
+            <pubDate>Fri, 12 Jun 2012 20:12:36 +0000</pubDate>
+            <description>Item #2 content</description>
+            <link>http://example.com/feed02/item02</link>
+            <guid>http://example.com/feed02/item02</guid>
+        </item>
+
+        <item>
+            <title>Item #3</title>
+            <pubDate>Fri, 10 Jun 2012 20:12:36 +0000</pubDate>
+            <description>Item #3 content</description>
+            <link>http://example.com/feed02/item03</link>
+            <guid>http://example.com/feed02/item03</guid>
+        </item>
+
+    </channel>
+</rss>

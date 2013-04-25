@@ -28,17 +28,8 @@ suite.addBatch({
     '(FeedItem models)': {
         topic: initTopic,
         teardown: initTeardown,
-        'play': {
-            topic: function () {
-                var $this = this;
-                request(this.base_url + '200?id=wang', function (err, resp, body) {
-                    $this.callback(null, body);
-                });
-            },
-            'should work': function (err, foo) {
-            }
-        },
-        'a changing feed resource': {
+
+        'a changing feed resource, polled and parsed several times': {
             topic: function () {
                 var $this = this;
 
@@ -49,15 +40,13 @@ suite.addBatch({
                 var feed_items = new models.FeedItemCollection();
                 feed_items.sync = $this.sync_proxy;
 
+                this.msync.store = {};
+
                 var results = [];
                 var doPoll = function (resource, wf_next) {
                     resource.poll({
                         max_age: 0
                     }, function (err, resource) {
-                        util.debug("ITEMS CT " + feed_items.models.length);
-                        feed_items.each(function (item) {
-                            util.debug("ID " + item.get('id'));
-                        });
                         feed_items.parseResource(resource, function (err, result) {
                             results.push(result);
                             wf_next(null, resource);
@@ -71,32 +60,41 @@ suite.addBatch({
                             resource_url: $this.base_url + '200seq/feed-seq-$$.xml'
                         }, {
                             success: function (resource, resp, options) {
-                                util.debug("URL " + resource.get('resource_url'));
                                 wf_next(null, resource);
                             }
                         });
                     },
                     doPoll, doPoll, doPoll, doPoll
                 ], function (err, result) {
-                    $this.callback(err, results);
+                    $this.callback(err, feed_items, results);
                 });
             },
-            'should work okay':
-                    function (err, results) {
-
-                /*
-                var items = feed_items.map(function (item) {
-                    var data = item.pick('resource_url', 'link', 'published');
-                    data.published = ''+data.published;
-                    return data;
-                });
-                */
-
-                util.debug('RESULTS ' + util.inspect(results));
-
+            'should yield expected parsed and new items':
+                    function (err, feed_items, results) {
+                // Ensure the parsed counts for the polls match feeds
+                assert.deepEqual(
+                    results.map(function (i) {
+                        return i.parsed.length;
+                    }),
+                    [3, 4, 5, 3]
+                );
+                // Check new item counts against expectations.
+                assert.deepEqual(
+                    results.map(function (i) {
+                        return i.new_items.length;
+                    }),
+                    [3, 1, 1, 0]
+                );
             }
-        },
-        /*
+        }
+    }
+});
+
+suite.addBatch({
+    '(FeedItem models #2)': {
+        topic: initTopic,
+        teardown: initTeardown,
+
         'a set of fixture feed resources, all polled and parsed': {
             topic: function () {
                 var $this = this;
@@ -135,7 +133,13 @@ suite.addBatch({
                                 fe_next();
                             });
                         }, function (err) {
-                            $this.callback(err, resources, feed_items, stats, feed_stats);
+                            feed_items.fetch({
+                                orderBy: '-published',
+                                success: function (feed_items, resp, options) {
+                                    $this.callback(err, resources, feed_items,
+                                                   stats, feed_stats);
+                                }
+                            });
                         });
                     });
                 });
@@ -191,20 +195,20 @@ suite.addBatch({
                     } 
                 ];
                     
-                var items = feed_items.map(function (item) {
+                var items = [];
+                feed_items.each(function (item) {
                     var data = item.pick('resource_url', 'link', 'published');
                     data.published = ''+data.published;
-                    return data;
+                    items.push(data);
                 });
 
                 assert.deepEqual(items, expected);
             }
         }
-        */
     }
 });
 
-if (false) suite.addBatch({
+suite.addBatch({
     '(Resource models)': {
         topic: initTopic,
         teardown: initTeardown,

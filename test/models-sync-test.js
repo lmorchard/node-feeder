@@ -31,11 +31,12 @@ var CASES = {
     }),
     dirty: new models_sync.DirtySync({
         name: 'tmp/db-test-dirty-sync'
-    }),
+    })/*,
     couch: new models_sync.CouchSync({
         url: 'http://tester:tester@localhost:5984',
         name: 'db-test-couch-sync'
     })
+    */
 };
 
 BaseModel = Backbone.Model.extend({

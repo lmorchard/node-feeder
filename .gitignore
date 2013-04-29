@@ -2,3 +2,5 @@ node_modules
 npm-debug.log
 *.sw[nop]
 feeder.db
+tmp/
+test.db

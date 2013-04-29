@@ -159,7 +159,6 @@ suite.addBatch({
                     data.published = ''+data.published;
                     items.push(data);
                 });
-
                 // assert.deepEqual(items, expected);
             }
         }

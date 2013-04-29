@@ -91,6 +91,58 @@ _.each(CASES, function (case_msync, case_name) {
         teardown: function () {
             this.msync.close();
         },
+        'with a single object created': {
+            topic: function () {
+                var $this = this;
+                var coll = new MonsterCollection();
+                coll.sync = this.sync_proxy;
+                coll.create({
+                    "name": "foobar",
+                    "arms": 5,
+                    "meta": {"test": "data"}
+                }, {
+                    success: function (model, resp, options) {
+                        $this.callback(null, model);
+                    },
+                    error: function (err) {
+                        $this.callback(err, null);
+                    }
+                });
+            },
+            teardown: function () {
+                // Ensure the object doesn't exist
+                var coll = new MonsterCollection();
+                coll.sync = this.sync_proxy;
+                var obj = new Monster({'name':'foobar'});
+                obj.collection = coll;
+                obj.fetch({
+                    success: function () { obj.destroy(); }
+                });
+            },
+            'and a second attempt to create the same object': {
+                topic: function (err) {
+                    var $this = this;
+                    // Same name, no ID - should be a conflict.
+                    var coll = new MonsterCollection();
+                    coll.sync = this.sync_proxy;
+                    coll.create({
+                        "name": "foobar",
+                        "arms": 10,
+                        "meta": {"test": "changed"}
+                    }, {
+                        success: function (model, resp, options) {
+                            $this.callback(null, model);
+                        },
+                        error: function (err) {
+                            $this.callback(err, null);
+                        }
+                    });
+                },
+                'should result in an error': function (err, coll, model) {
+                    assert(!!err, 'There should be an error');
+                }
+            }
+        },
         'with sample model objects': {
             topic: function () {
                 var $this = this;

@@ -78,15 +78,36 @@ var SAMPLE_DATA = _.object(_.map([
 
 var suite = vows.describe('Model sync tests');
 
+function collection ($this) {
+    var coll = new MonsterCollection();
+    coll.sync = $this.sync_proxy;
+    return coll;
+}
+
 _.each(CASES, function (case_msync, case_name) {
     var batch = {};
     batch[case_name + ' sync'] = {
         topic: function () {
             var $this = this;
+
             this.msync = case_msync;
             this.msync.open(function (err, sync_proxy) {
                 $this.sync_proxy = sync_proxy;
-                $this.callback(err);
+
+                // Wipe any objects in storage (eg. for Couch)
+                var coll = collection($this);
+                coll.fetch({
+                    error: function () { $this.callback(); },
+                    success: function (items, resp, options) {
+                        var to_delete = _.clone(items.models);
+                        async.each(to_delete, function (item, fe_next) {
+                            item.destroy({
+                                success: function () { fe_next(); },
+                                error: function () { fe_next(); }
+                            });
+                        }, function (err) { $this.callback(); });
+                    }
+                });
             });
         },
         teardown: function () {
@@ -144,7 +165,7 @@ _.each(CASES, function (case_msync, case_name) {
                 }
             }
         },
-        'with sample model objects': {
+        'with objects created individually': {
             topic: function () {
                 var $this = this;
                 var coll = new MonsterCollection();
@@ -187,7 +208,7 @@ _.each(CASES, function (case_msync, case_name) {
                 }
             },
             'and the full collection fetched': { 
-                topic: function (err, coll) {
+                topic: function (err) {
                     var $this = this;
                     var coll = new MonsterCollection();
                     coll.sync = this.sync_proxy;
@@ -208,7 +229,7 @@ _.each(CASES, function (case_msync, case_name) {
                 }
             },
             'and every item deleted': {
-                topic: function (err, coll) {
+                topic: function (err) {
                     var $this = this;
                     var models = [];
 
@@ -216,12 +237,11 @@ _.each(CASES, function (case_msync, case_name) {
                     coll.sync = this.sync_proxy;
                     coll.fetch({
                         success: function (items, resp, options) {
-                            items.each(function (item) {
-                                models.push(item);
-                            });
+                            models = _.clone(items.models);
                             async.each(models, function (model, fe_next) {
                                 model.destroy({
-                                    success: function () { fe_next(); }
+                                    success: function () { fe_next(); },
+                                    error: function () { fe_next(); }
                                 });
                             }, function (err) {
                                 $this.callback(err, models);
@@ -242,8 +262,76 @@ _.each(CASES, function (case_msync, case_name) {
                     },
                     'should result in an empty collection':
                             function (err, items) {
+                        items.each(function (item) {
+                            util.debug("ITEM " + item.url());
+                        });
                         assert.equal(items.length, 0);
                     }
+                }
+            }
+        },
+        'with a batch of objects created': {
+            topic: function () {
+                var $this = this;
+                
+                var batch_data = _.object(_.map(SAMPLE_DATA,
+                        function (item, key) {
+                    var batch_item = _.clone(item);
+                    batch_item.name = 'batch-' + item.name;
+                    return ['/monsters/' + batch_item.name, batch_item];
+                }));
+
+                var coll = new MonsterCollection();
+                coll.sync = this.sync_proxy;
+                coll.add(_.values(batch_data));
+                coll.sync('batch', coll, {
+                    success: function (successes, errors) {
+                        $this.callback(null, batch_data, successes, errors);
+                    }
+                });
+            },
+            teardown: function (err, batch_data, successes, errors) {
+                successes.forEach(function (model) {
+                    model.destroy({wait: true});
+                });
+            },
+            'should result in success for all batch items':
+                    function (err, batch_data, successes, errors) {
+                assert.equal(successes.length,
+                             _.keys(batch_data).length);
+                successes.forEach(function (item) {
+                    var url = _.result(item, 'url');
+                    var expected = batch_data[url];
+                    _.each(expected, function (val, key) {
+                        assert.deepEqual(item.get(key), val);
+                    });
+                });
+            },
+            'and the full collection fetched': { 
+                topic: function (err, batch_data) {
+                    var $this = this;
+                    var coll = new MonsterCollection();
+                    coll.sync = this.sync_proxy;
+                    coll.fetch({
+                        success: function (items, resp, options) {
+                            $this.callback(null, batch_data, items);
+                        }
+                    });
+                },
+                'should result in fetched items that match the sample data':
+                        function (err, batch_data, items) {
+                    var result_items = items.filter(function (item) {
+                        return item.url().indexOf('batch-') !== -1;
+                    });
+                    assert.equal(result_items.length,
+                                 _.keys(batch_data).length);
+                    result_items.forEach(function (item) {
+                        var url = _.result(item, 'url');
+                        var expected = batch_data[url];
+                        _.each(expected, function (val, key) {
+                            assert.deepEqual(item.get(key), val);
+                        });
+                    });
                 }
             }
         }

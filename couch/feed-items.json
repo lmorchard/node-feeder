@@ -1,0 +1,8 @@
+{
+  "_id" : "_design/feed-items",
+  "views" : {
+    "all" : {
+      "map" : "function (doc) { if (doc._id.indexOf('/feed-items/') === 0) { emit(doc._id, doc); } }"
+    }
+  }
+}

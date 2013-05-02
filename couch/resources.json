@@ -1,0 +1,9 @@
+{
+  "_id" : "_design/resources",
+  "_rev": "2-cc381cb42a4447b98b1d7562fbafe857",
+  "views" : {
+    "all" : {
+      "map" : "function (doc) { if (doc._id.indexOf('/resources/') === 0) { emit(doc._id, doc); } }"
+    }
+  }
+}

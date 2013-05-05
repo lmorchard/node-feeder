@@ -45,7 +45,7 @@ suite.addBatch({
             this.server = new Server({port: SERVER_PORT});
             this.server.listen();
 
-            this.msync = new models_sync.LocmemSync();
+            this.msync = new models_sync.HashSync();
             this.msync.open(function (err, sync_proxy) {
                 $this.sync_proxy = sync_proxy;
                 Backbone.sync = sync_proxy;

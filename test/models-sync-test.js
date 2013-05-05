@@ -231,7 +231,7 @@ _.each(CASES, function (case_msync, case_name) {
             'and every item deleted': {
                 topic: function (err) {
                     var $this = this;
-                    var models = [];
+                    var deleted_ids = [];
 
                     var coll = new MonsterCollection();
                     coll.sync = this.sync_proxy;
@@ -239,33 +239,36 @@ _.each(CASES, function (case_msync, case_name) {
                         success: function (items, resp, options) {
                             models = _.clone(items.models);
                             async.each(models, function (model, fe_next) {
+                                deleted_ids.push(model.id);
                                 model.destroy({
                                     success: function () { fe_next(); },
                                     error: function () { fe_next(); }
                                 });
                             }, function (err) {
-                                $this.callback(err, models);
+                                $this.callback(err, deleted_ids);
                             });
                         }
                     });
                 },
                 'and the full collection fetched': { 
-                    topic: function (err) {
+                    topic: function (err, deleted_ids) {
                         var $this = this;
                         var coll = new MonsterCollection();
                         coll.sync = this.sync_proxy;
                         coll.fetch({
                             success: function (items, resp, options) {
-                                $this.callback(null, items);
+                                $this.callback(null, deleted_ids, items);
                             }
                         });
                     },
-                    'should result in an empty collection':
-                            function (err, items) {
-                        items.each(function (item) {
-                            util.debug("ITEM " + item.url());
+                    'should result in none of the deleted items present':
+                            function (err, deleted_ids, items) {
+                        var found_ids = items.map(function (item) {
+                            return item.id;
                         });
-                        assert.equal(items.length, 0);
+                        deleted_ids.forEach(function (item) {
+                            assert.equal(found_ids.indexOf(item.id), -1);
+                        });
                     }
                 }
             }
@@ -306,6 +309,30 @@ _.each(CASES, function (case_msync, case_name) {
                         assert.deepEqual(item.get(key), val);
                     });
                 });
+            },
+            'and a second batch attempt with some new and some existing': {
+                topic: function (err, batch_data, successes, errors) {
+                    var $this = this;
+
+                    var new_batch = _.extend(_.clone(batch_data), {
+                        '/monsters/new-1': { name: 'new-1', eyes: 4 },
+                        '/monsters/new-2': { name: 'new-2', eyes: 5 }
+                    });
+
+                    var coll = new MonsterCollection();
+                    coll.sync = this.sync_proxy;
+                    coll.add(_.values(new_batch));
+                    coll.sync('batch', coll, {
+                        success: function (successes, errors) {
+                            $this.callback(null, new_batch, successes, errors);
+                        }
+                    });
+                },
+                'should result in errors for the existing items': 
+                        function (err, new_batch, successes, errors) {
+                    assert.equal(successes.length, 2);
+                    assert.equal(errors.length, 4);
+                }
             },
             'and the full collection fetched': { 
                 topic: function (err, batch_data) {

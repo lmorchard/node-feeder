@@ -1,5 +1,13 @@
 function t_now () { return new Date(); }
 
+$(document).ready(function () {
+});
+
+$("img.lazy").lazyload({
+    // threshold: 100,
+    effect: "fadeIn"
+});
+
 $('section#poll').each(function () {
     
     var sock = io.connect('http://localhost:9070');
@@ -100,8 +108,8 @@ $('section#poll').each(function () {
 
     $('#startPoll').click(function (ev) {
         sock.emit('startPoll', {
-            // max_age: 0,
-            concurrency: 8
+            max_age: 1000 * 60 * 30,
+            concurrency: 16
         });
     });
 

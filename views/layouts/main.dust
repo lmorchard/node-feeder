@@ -55,6 +55,7 @@
 
     <script src="/js/md5.min.js"></script>
     <script src="/js/jquery.js"></script>
+    <script src="/js/jquery.lazyload.js"></script>
     <script src="/bootstrap/js/bootstrap.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/main.js"></script>

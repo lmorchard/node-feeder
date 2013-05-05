@@ -40,9 +40,6 @@ suite.addBatch({
                 var resources = r[0];
                 var stats = r[1];
 
-                var feed_items = new models.FeedItemCollection();
-                feed_items.sync = $this.sync_proxy;
-
                 this.msync.store = {};
 
                 var results = [];
@@ -50,6 +47,8 @@ suite.addBatch({
                     resource.poll({
                         max_age: 0
                     }, function (err, resource) {
+                        var feed_items = new models.FeedItemCollection();
+                        feed_items.sync = $this.sync_proxy;
                         feed_items.parseResource(resource, function (err, result) {
                             results.push(result);
                             wf_next(null, resource);
@@ -69,11 +68,11 @@ suite.addBatch({
                     },
                     doPoll, doPoll, doPoll, doPoll
                 ], function (err, result) {
-                    $this.callback(err, feed_items, results);
+                    $this.callback(err, results);
                 });
             },
             'should yield expected parsed and new items':
-                    function (err, feed_items, results) {
+                    function (err, results) {
                 // Ensure the parsed counts for the polls match feeds
                 assert.deepEqual(
                     results.map(function (i) {
@@ -234,6 +233,23 @@ suite.addBatch({
                 url_hit: null
             })
         },
+        'a gzipped resource': {
+            topic: resourceTopic({ resource_url: 'gzip-fixtures/feed01.xml' }),
+            'that has been polled': {
+                topic: function (err, r) {
+                    var $this = this;
+                    r.poll({}, $this.callback);
+                },
+                'should have headers reflecting gzip response': function (err, r) {
+                    var headers = r.get('headers');
+                    assert.equal(headers['content-encoding'], 'gzip');
+                },
+                'should be stored uncompressed': function (err, r) {
+                    var feed01_content = fs.readFileSync(d('fixtures/feed01.xml'));
+                    assert.equal(r.get('body'), feed01_content);
+                }
+            }
+        },
         'a 200-then-500 resource': {
             topic: resourceTopic({ resource_url: '200then500' }),
             'that has been polled twice': {
@@ -245,12 +261,13 @@ suite.addBatch({
                         r.poll({}, $this.callback);
                     });
                 },
-                'should result in 500 status, yet body content from previous 200 OK': assertResource({
-                    equals: { status_code: 500, body: test_utils.TEST_BODY_200 },
-                    error: false,
-                    headers_empty: null,
-                    url_hit: null
-                })
+                'should result in 500 status, yet body content from previous 200 OK': 
+                    assertResource({
+                        equals: { status_code: 500, body: test_utils.TEST_BODY_200 },
+                        error: false,
+                        headers_empty: null,
+                        url_hit: null
+                    })
             }
         },
         

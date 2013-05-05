@@ -41,7 +41,9 @@
     "devDependencies": {
         "vows": "*",
         "jshint": "*",
-        "supervisor": "*"
+        "supervisor": "*",
+        "connect": "*",
+        "gzippo": "*"
     },
     "optionalDependencies": {},
     "engines": {

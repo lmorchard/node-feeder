@@ -21,6 +21,7 @@ $('section#poll').each(function () {
     }
 
     var t_start = null;
+    var times;
 
     setInterval(function () {
         $('.inprogress li').each(function () {
@@ -109,7 +110,7 @@ $('section#poll').each(function () {
     $('#startPoll').click(function (ev) {
         sock.emit('startPoll', {
             max_age: 1000 * 60 * 30,
-            concurrency: 16
+            concurrency: 8
         });
     });
 

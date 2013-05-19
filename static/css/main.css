@@ -22,7 +22,7 @@ ul.feeds .feed .items .item { float: left;  position: relative; margin: 4px; wid
 ul.feeds .feed .items .item a { display: block; width: 128px; height: 128px; text-decoration: none; overflow: hidden; }
 ul.feeds .feed .items .item a img { width: 128px; height: 128px; position: absolute; top: 0; left: 0 }
 ul.feeds .feed .items .item a span { 
-    font-size: 0.75em; line-height: 1.125em;
+    font-size: 0.72em; line-height: 1.125em;
     display: block; min-width: calc(100% - 12px);
     position: absolute; bottom: 0; left: 0; 
     background: rgba(0,0,0,0.6); color: #fff;

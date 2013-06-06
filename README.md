@@ -17,6 +17,7 @@ consumer product.
 * UI
     * Thumb extractor
         * Cache results of thumb scraping in backbone models
+            * Stop caching those results in memory (ouch)
         * Lazily queue up requests to find thumbs
         * Find a way to cheat on how much data this thing needs. Seems like a
           lot of HTTP requests, needing to visit each and every resource to
@@ -25,6 +26,7 @@ consumer product.
           periodically poll until later when the thumb service has found
           something?
 * Poller
+    * Use pagination in poller - do not load up all resources into memory
     * Record poll history per-resource
         * New items, HTTP status, response time
         * Maybe try to measure time between new item discovery and published time in resource?

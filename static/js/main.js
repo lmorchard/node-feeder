@@ -1,8 +1,5 @@
 function t_now () { return new Date(); }
 
-$(document).ready(function () {
-});
-
 $("img.lazy").lazyload({
     // threshold: 100,
     effect: "fadeIn"

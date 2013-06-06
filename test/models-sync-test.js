@@ -12,9 +12,11 @@ var util = require('util'),
     _ = require('underscore'),
     Backbone = require('backbone');
 
+/*
 process.on('uncaughtException', function (e) {
     util.error('ERRRRR ' + (e.stack));
 });
+*/
 
 function r (p) { return require(__dirname + '/../lib/' + p); }
 
@@ -25,18 +27,22 @@ var models = r('models'),
 function d (p) { return __dirname + '/' + p; }
 
 var CASES = {
+    /*
     hash: new models_sync.HashSync(),
     file: new models_sync.FileSync({
         name: 'tmp/db-test-file-sync'
     }),
     dirty: new models_sync.DirtySync({
         name: 'tmp/db-test-dirty-sync'
-    })/*,
+    }),
     couch: new models_sync.CouchSync({
         url: 'http://tester:tester@localhost:5984',
         name: 'db-test-couch-sync'
     })
     */
+    mongo: new models_sync.MongoSync({
+        url: 'mongodb://127.0.0.1:27017/db-test-mongo-sync'
+    })
 };
 
 BaseModel = Backbone.Model.extend({
@@ -155,7 +161,7 @@ _.each(CASES, function (case_msync, case_name) {
                         success: function (model, resp, options) {
                             $this.callback(null, model);
                         },
-                        error: function (err) {
+                        error: function (model, err, options) {
                             $this.callback(err, null);
                         }
                     });
@@ -294,7 +300,7 @@ _.each(CASES, function (case_msync, case_name) {
                 });
             },
             teardown: function (err, batch_data, successes, errors) {
-                successes.forEach(function (model) {
+                if (successes) successes.forEach(function (model) {
                     model.destroy({wait: true});
                 });
             },
@@ -362,6 +368,8 @@ _.each(CASES, function (case_msync, case_name) {
                 }
             }
         }
+        /*,
+        */
     };
     suite.addBatch(batch);
 });

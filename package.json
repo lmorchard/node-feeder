@@ -30,6 +30,7 @@
         "socket.io-client": "*",
         "backbone": "*",
         "backbone-callbacks": "*",
+        "mongodb": "*",
         "nano": "*",
         "dirty": "*",
         "backbone-dirty": "*",

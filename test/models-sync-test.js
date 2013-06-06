@@ -12,11 +12,9 @@ var util = require('util'),
     _ = require('underscore'),
     Backbone = require('backbone');
 
-/*
 process.on('uncaughtException', function (e) {
     util.error('ERRRRR ' + (e.stack));
 });
-*/
 
 function r (p) { return require(__dirname + '/../lib/' + p); }
 
@@ -27,7 +25,6 @@ var models = r('models'),
 function d (p) { return __dirname + '/' + p; }
 
 var CASES = {
-    /*
     hash: new models_sync.HashSync(),
     file: new models_sync.FileSync({
         name: 'tmp/db-test-file-sync'
@@ -35,10 +32,11 @@ var CASES = {
     dirty: new models_sync.DirtySync({
         name: 'tmp/db-test-dirty-sync'
     }),
+    /*
     couch: new models_sync.CouchSync({
         url: 'http://tester:tester@localhost:5984',
         name: 'db-test-couch-sync'
-    })
+    }),
     */
     mongo: new models_sync.MongoSync({
         url: 'mongodb://127.0.0.1:27017/db-test-mongo-sync'
@@ -111,7 +109,9 @@ _.each(CASES, function (case_msync, case_name) {
                                 success: function () { fe_next(); },
                                 error: function () { fe_next(); }
                             });
-                        }, function (err) { $this.callback(); });
+                        }, function (err) { 
+                            $this.callback();
+                        });
                     }
                 });
             });
@@ -178,11 +178,11 @@ _.each(CASES, function (case_msync, case_name) {
                 coll.sync = this.sync_proxy;
                 async.each(_.values(SAMPLE_DATA), function (item, fe_next) {
                     coll.create(item, {
-                        success: function (model, resp, options) {
-                            fe_next();
-                        }
+                        success: function (m, r, o) { fe_next(); },
+                        error: function (m, err, o) { fe_next(err); }
                     });
                 }, function (err) {
+                    assert(!err, "There should be no error");
                     $this.callback(err, coll);
                 });
             },
@@ -197,6 +197,9 @@ _.each(CASES, function (case_msync, case_name) {
                             success: function (model, resp, options) {
                                 items.push(model);
                                 fe_next();
+                            },
+                            error: function (model, err, options) {
+                                fe_next(err);
                             }
                         });
                     }, function (err) {
@@ -205,6 +208,7 @@ _.each(CASES, function (case_msync, case_name) {
                 },
                 'should result in fetched items that match the sample data':
                         function (err, items) {
+                    assert(!err, 'There should be no error');
                     items.forEach(function (o) {
                         var expected = SAMPLE_DATA[o.url()];
                         _.each(expected, function (val, key) {
@@ -368,8 +372,6 @@ _.each(CASES, function (case_msync, case_name) {
                 }
             }
         }
-        /*,
-        */
     };
     suite.addBatch(batch);
 });
